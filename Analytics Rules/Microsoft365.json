@@ -1,0 +1,1401 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/12957ee4-4700-4cf6-a0c2-daf27bc62e4d')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/12957ee4-4700-4cf6-a0c2-daf27bc62e4d')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "SharePointFileOperation via devices with previously unseen user agents",
+                "description": "Identifies anomalies if the number of documents uploaded or downloaded from device(s) associated with a previously unseen user agent exceeds a threshold (default is 5) and deviation (default is 25).",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Set threshold for the number of downloads/uploads from a new user agent\nlet threshold = 5;\n// Define constants for SharePoint file operations\nlet szSharePointFileOperation = \"SharePointFileOperation\";\nlet szOperations = dynamic([\"FileDownloaded\", \"FileUploaded\"]);\n// Define the historical activity for analysis\nlet starttime = 14d; // Define the start time for historical data (14 days ago)\nlet endtime = 1d;   // Define the end time for historical data (1 day ago)\n// Extract the base events for analysis\nlet Baseevents =\n  OfficeActivity\n  | where TimeGenerated between (ago(starttime) .. ago(endtime))\n  | where RecordType =~ szSharePointFileOperation\n  | where Operation in~ (szOperations)\n  | where isnotempty(UserAgent);\n// Identify frequently occurring user agents\nlet FrequentUA = Baseevents\n  | summarize FUACount = count() by UserAgent, RecordType, Operation\n  | where FUACount >= threshold\n  | distinct UserAgent;\n// Calculate a user baseline for further analysis\nlet UserBaseLine = Baseevents\n  | summarize Count = count() by UserId, Operation, Site_Url\n  | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url;\n// Extract recent activity for analysis\nlet RecentActivity = OfficeActivity\n  | where TimeGenerated > ago(endtime)\n  | where RecordType =~ szSharePointFileOperation\n  | where Operation in~ (szOperations)\n  | where isnotempty(UserAgent)\n  | where UserAgent in~ (FrequentUA)\n  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OfficeObjectIdCount = dcount(OfficeObjectId), OfficeObjectIdList = make_set(OfficeObjectId), UserAgentSeenCount = count() \n  by RecordType, Operation, UserAgent, UserType, UserId, ClientIP, OfficeWorkload, Site_Url;\n// Analyze user behavior based on baseline and recent activity\nlet UserBehaviorAnalysis = UserBaseLine\n  | join kind=inner (RecentActivity) on UserId, Operation, Site_Url\n  | extend Deviation = abs(UserAgentSeenCount - AvgCount) / AvgCount;\n// Filter and format results for specific user behavior analysis\nUserBehaviorAnalysis\n  | where Deviation > 25\n  | extend UserIdName = tostring(split(UserId, '@')[0]), UserIdUPNSuffix = tostring(split(UserId, '@')[1])\n  | project-reorder StartTime, EndTime, UserAgent, UserAgentSeenCount, UserId, ClientIP, Site_Url\n  | project-away Site_Url1, UserId1, Operation1\n  | order by UserAgentSeenCount desc, UserAgent asc, UserId asc, Site_Url asc\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1030"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "5dd76a87-9f87-4576-bab3-268b0e2b338b",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UserIdUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "Site_Url"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.2.4"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/0ffff1b1-032e-47bc-96bc-eb55619370c1')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/0ffff1b1-032e-47bc-96bc-eb55619370c1')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "External user added and removed in short timeframe",
+                "description": "This detection flags the occurrences of external user accounts that are added to a Team and then removed within one hour.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "let TeamsAddDel = (Op:string){\nOfficeActivity\n| where OfficeWorkload =~ \"MicrosoftTeams\"\n| where Operation == Op\n| where Members has (\"#EXT#\")\n| mv-expand Members\n| extend UPN = tostring(Members.UPN)\n| where UPN has (\"#EXT#\")\n| project TimeGenerated, Operation, UPN, UserId, TeamName, ClientIP\n};\nlet TeamsAdd = TeamsAddDel(\"MemberAdded\")\n| project TimeAdded=TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDel = TeamsAddDel(\"MemberRemoved\")\n| project TimeDeleted=TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nTeamsAdd\n| join kind=inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved\n| where TimeDeleted > TimeAdded\n| project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName, ClientIP\n| extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, \"@\")[0]), MemberAdded_RemovedAccountUPNSuffix = tostring(split(MemberAdded_Removed, \"@\")[1])\n| extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n| extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1136"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "bff093b2-500e-4ae5-bb49-a5b1423cbd5b",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "MemberAdded_Removed"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "MemberAdded_RemovedAccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "MemberAdded_RemovedAccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserWhoAdded"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserWhoAddedAccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UserWhoAddedAccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserWhoDeleted"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserWhoDeletedAccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UserWhoDeletedAccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.1.3"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/59bfbcfa-bb15-42c1-9342-ffa3cfbda82b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/59bfbcfa-bb15-42c1-9342-ffa3cfbda82b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "New executable via Office FileUploaded Operation",
+                "description": "Identifies when executable file types are uploaded to Office services such as SharePoint and OneDrive.\nList currently includes 'exe', 'inf', 'gzip', 'cmd', 'bat' file extensions.\nAdditionally, identifies when a given user is uploading these files to another users workspace.\nThis may be indication of a staging location for malware or other malicious activity.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// a threshold can be enabled, see commented line below for PrevSeenCount\nlet threshold = 2;\nlet uploadOp = 'FileUploaded';\n// Extensions that are interesting. Add/Remove to this list as you see fit\nlet execExt = dynamic(['exe', 'inf', 'gzip', 'cmd', 'bat']);\nlet starttime = 8d;\nlet endtime = 1d;\nOfficeActivity | where TimeGenerated >= ago(endtime)\n// Limited to File Uploads due to potential noise, comment out the Operation statement below to include any operation type\n// Additional, but potentially noisy operation types that include Uploads and Downloads can be included by adding the following - Operation contains \"upload\" or Operation contains \"download\"\n| where Operation =~ uploadOp\n| where SourceFileExtension has_any (execExt)\n| project TimeGenerated, OfficeId, OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIP, UserAgent, Site_Url, SourceRelativeUrl, SourceFileName\n| join kind= leftanti (\nOfficeActivity | where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where Operation =~ uploadOp\n| where SourceFileExtension has_any (execExt)\n| summarize SourceRelativeUrl = make_set(SourceRelativeUrl, 100000), UserId = make_set(UserId, 100000) , PrevSeenCount = count() by SourceFileName\n// To exclude previous matches when only above a specific count, change threshold above and uncomment the line below\n//| where PrevSeenCount > threshold\n| mvexpand SourceRelativeUrl, UserId\n| extend SourceRelativeUrl = tostring(SourceRelativeUrl), UserId = tostring(UserId)\n) on SourceFileName, SourceRelativeUrl, UserId\n| extend SiteUrlUserFolder = tolower(split(Site_Url, '/')[-2])\n| extend UserIdUserFolderFormat = tolower(replace_regex(UserId, '@|\\\\.', '_'))\n// identify when UserId is not a match to the specific site url personal folder reference\n| extend UserIdDiffThanUserFolder = iff(Site_Url has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true , false )\n| summarize TimeGenerated = make_list(TimeGenerated, 100000), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated),\nUserAgents = make_list(UserAgent, 100000), OfficeIds = make_list(OfficeId, 100000), SourceRelativeUrls = make_list(SourceRelativeUrl, 100000), FileNames = make_list(SourceFileName, 100000)\nby OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIP, Site_Url, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P8D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CommandAndControl",
+                    "LateralMovement"
+                ],
+                "techniques": [
+                    "T1105",
+                    "T1570"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "d722831e-88f5-4e25-b106-4ef6e29f8c13",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "Site_Url"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileNames"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.5"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/99018312-ebd6-4b32-84c6-0b6957bfe8a3')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/99018312-ebd6-4b32-84c6-0b6957bfe8a3')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Multiple users email forwarded to same destination",
+                "description": "Identifies when multiple (more than one) users mailboxes are configured to forward to the same destination. \nThis could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised user accounts.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let queryfrequency = 1d;\nlet queryperiod = 7d;\nOfficeActivity\n| where TimeGenerated > ago(queryperiod)\n| where OfficeWorkload =~ \"Exchange\"\n//| where Operation in (\"Set-Mailbox\", \"New-InboxRule\", \"Set-InboxRule\")\n| where Parameters has_any (\"ForwardTo\", \"RedirectTo\", \"ForwardingSmtpAddress\")\n| mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(bag_pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))\n| evaluate bag_unpack(ParsedParameters, columnsConflict='replace_source')\n| extend DestinationMailAddress = tolower(case(\n    isnotempty(column_ifexists(\"ForwardTo\", \"\")), column_ifexists(\"ForwardTo\", \"\"),\n    isnotempty(column_ifexists(\"RedirectTo\", \"\")), column_ifexists(\"RedirectTo\", \"\"),\n    isnotempty(column_ifexists(\"ForwardingSmtpAddress\", \"\")), trim_start(@\"smtp:\", column_ifexists(\"ForwardingSmtpAddress\", \"\")),\n    \"\"))\n| where isnotempty(DestinationMailAddress)\n| mv-expand split(DestinationMailAddress, \";\")\n| extend ClientIPValues = extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?([-:](?P<Port>\\d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIP)[0]\n| extend ClientIP = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1])\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = make_set(UserId, 250), Ports = make_set(Port, 250), EventCount = count() by tostring(DestinationMailAddress), ClientIP\n| where DistinctUserCount > 1 and EndTime > ago(queryfrequency)\n| mv-expand UserId to typeof(string)\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P7D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Collection",
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1114",
+                    "T1020"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "871ba14c-88ef-48aa-ad38-810f26760ca3",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.3"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ed4f803e-335a-4ce6-94e2-c9691b153d5d')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ed4f803e-335a-4ce6-94e2-c9691b153d5d')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Multiple users email forwarded to same destination",
+                "description": "Identifies when multiple (more than one) users mailboxes are configured to forward to the same destination. \nThis could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised user accounts.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let queryfrequency = 1d;\nlet queryperiod = 7d;\nOfficeActivity\n| where TimeGenerated > ago(queryperiod)\n| where OfficeWorkload =~ \"Exchange\"\n//| where Operation in (\"Set-Mailbox\", \"New-InboxRule\", \"Set-InboxRule\")\n| where Parameters has_any (\"ForwardTo\", \"RedirectTo\", \"ForwardingSmtpAddress\")\n| mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(bag_pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))\n| evaluate bag_unpack(ParsedParameters, columnsConflict='replace_source')\n| extend DestinationMailAddress = tolower(case(\n    isnotempty(column_ifexists(\"ForwardTo\", \"\")), column_ifexists(\"ForwardTo\", \"\"),\n    isnotempty(column_ifexists(\"RedirectTo\", \"\")), column_ifexists(\"RedirectTo\", \"\"),\n    isnotempty(column_ifexists(\"ForwardingSmtpAddress\", \"\")), trim_start(@\"smtp:\", column_ifexists(\"ForwardingSmtpAddress\", \"\")),\n    \"\"))\n| where isnotempty(DestinationMailAddress)\n| mv-expand split(DestinationMailAddress, \";\")\n| extend ClientIPValues = extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?([-:](?P<Port>\\d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIP)[0]\n| extend ClientIP = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1])\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = make_set(UserId, 250), Ports = make_set(Port, 250), EventCount = count() by tostring(DestinationMailAddress), ClientIP\n| where DistinctUserCount > 1 and EndTime > ago(queryfrequency)\n| mv-expand UserId to typeof(string)\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P7D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Collection",
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1114",
+                    "T1020"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "871ba14c-88ef-48aa-ad38-810f26760ca3",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.3"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/bdd938a0-8a9b-42ed-8197-6fb55701b853')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/bdd938a0-8a9b-42ed-8197-6fb55701b853')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Exchange workflow MailItemsAccessed operation anomaly",
+                "description": "Identifies anomalous increases in Exchange mail items accessed operations.\nThe query leverages KQL built-in anomaly detection algorithms to find large deviations from baseline patterns.\nSudden increases in execution frequency of sensitive actions should be further investigated for malicious activity.\nManually change scorethreshold from 1.5 to 3 or higher to reduce the noise based on outliers flagged from the query criteria.\nRead more about MailItemsAccessed- https://docs.microsoft.com/microsoft-365/compliance/advanced-audit?view=o365-worldwide#mailitemsaccessed",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet scorethreshold = 1.5;\nlet percentthreshold = 50;\n// Preparing the time series data aggregated hourly count of MailItemsAccessd Operation in the form of multi-value array to use with time series anomaly function.\nlet TimeSeriesData =\nOfficeActivity\n| where TimeGenerated  between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where OfficeWorkload=~ \"Exchange\" and Operation =~ \"MailItemsAccessed\" and ResultStatus =~ \"Succeeded\"\n| project TimeGenerated, Operation, MailboxOwnerUPN\n| make-series Total=count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe;\nlet TimeSeriesAlerts = TimeSeriesData\n| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, scorethreshold, -1, 'linefit')\n| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)\n| where anomalies > 0\n| project TimeGenerated, Total, baseline, anomalies, score;\n// Joining the flagged outlier from the previous step with the original dataset to present contextual information\n// during the anomalyhour to analysts to conduct investigation or informed decisions.\nTimeSeriesAlerts | where TimeGenerated > ago(2d)\n// Join against base logs since specified timeframe to retrive records associated with the hour of anomoly\n| join kind=innerunique (\n    OfficeActivity\n    | where TimeGenerated > ago(2d)\n    | extend DateHour = bin(TimeGenerated, 1h)\n    | where OfficeWorkload=~ \"Exchange\" and Operation =~ \"MailItemsAccessed\" and ResultStatus =~ \"Succeeded\"\n    | summarize HourlyCount=count(), TimeGeneratedMax = arg_max(TimeGenerated, *), IPAdressList = make_set(Client_IPAddress, 1000), SourceIPMax= arg_max(Client_IPAddress, *), ClientInfoStringList= make_set(ClientInfoString, 1000) by MailboxOwnerUPN, Logon_Type, TenantId, UserType, TimeGenerated = bin(TimeGenerated, 1h)\n    | where HourlyCount > 25 // Only considering operations with more than 25 hourly count to reduce False Positivies\n    | order by HourlyCount desc\n) on TimeGenerated\n| extend PercentofTotal = round(HourlyCount/Total, 2) * 100\n| where PercentofTotal > percentthreshold // Filter Users with count of less than 5 percent of TotalEvents per Hour to remove FPs/ users with very low count of MailItemsAccessed events\n| order by PercentofTotal desc\n| project-reorder TimeGeneratedMax, Type, OfficeWorkload, Operation, UserId, SourceIPMax, IPAdressList, ClientInfoStringList, HourlyCount, PercentofTotal, Total, baseline, score, anomalies\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Collection"
+                ],
+                "techniques": [
+                    "T1114"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "b4ceb583-4c44-4555-8ecf-39f572e827ba",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "Client_IPAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIPMax"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.5"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/86b7dced-cda5-4312-aa63-dea3a1f8232a')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/86b7dced-cda5-4312-aa63-dea3a1f8232a')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Multiple Teams deleted by a single user",
+                "description": "This detection flags the occurrences of deleting multiple teams within an hour.\nThis data is a part of Office 365 Connector in Microsoft Sentinel.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Adjust this value to change how many Teams should be deleted before including\nlet max_delete_count = 3;\n// Adjust this value to change the timewindow the query runs over\n  OfficeActivity\n| where OfficeWorkload =~ \"MicrosoftTeams\"\n| where Operation =~ \"TeamDeleted\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(TeamName, 1000) by UserId\n| where array_length(DeletedTeams) > max_delete_count\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1485",
+                    "T1489"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "173f8699-6af5-484a-8b06-8c47ba89b380",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.4"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c7fae876-d9a9-4348-9169-609875c2fdd2')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c7fae876-d9a9-4348-9169-609875c2fdd2')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Accessed files shared by temporary external user",
+                "description": "This detection identifies when an external user is added to a Team or Teams chat and shares a file which is accessed by many users (>10) and the users is removed within short period of time. This might be an indicator of suspicious activity.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "let fileAccessThrehold = 10;\nOfficeActivity\n| where OfficeWorkload =~ \"MicrosoftTeams\"\n| where Operation =~ \"MemberAdded\"\n| extend MemberAdded = tostring(parse_json(Members)[0].UPN)\n| where MemberAdded contains (\"#EXT#\")\n| project TimeAdded=TimeGenerated, Operation, MemberAdded, UserWhoAdded = UserId, TeamName\n| join kind = inner (\n  OfficeActivity\n  | where OfficeWorkload =~ \"MicrosoftTeams\"\n  | where Operation =~ \"MemberRemoved\"\n  | extend MemberAdded = tostring(parse_json(Members)[0].UPN)\n  | where MemberAdded contains (\"#EXT#\")\n  | project TimeDeleted=TimeGenerated, Operation, MemberAdded, UserWhoDeleted = UserId, TeamName\n  ) on MemberAdded\n| where TimeDeleted > TimeAdded\n| join kind=inner (\n  OfficeActivity\n  | where RecordType == \"SharePointFileOperation\"\n  | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n  | where Operation == \"FileUploaded\"\n  | extend MemberAdded = UserId\n  | join kind = inner (\n      OfficeActivity\n      | where RecordType == \"SharePointFileOperation\"\n      | where Operation  == \"FileAccessed\"\n      | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n      | summarize FileAccessCount = count() by OfficeObjectId\n      | where FileAccessCount > fileAccessThrehold\n      ) on $left.OfficeObjectId == $right.OfficeObjectId\n  )on MemberAdded\n| project-away MemberAdded1, MemberAdded2, OfficeObjectId1, Operation1, Operation2, TeamName1, TeamName2\n| extend MemberAddedAccountName = tostring(split(MemberAdded, \"@\")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded, \"@\")[1])\n| extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n| extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1566"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "bff058b2-500e-4ae5-bb49-a5b1423cbd5b",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "MemberAdded"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "MemberAddedAccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "MemberAddedAccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserWhoAdded"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserWhoAddedAccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UserWhoAddedAccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserWhoDeleted"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserWhoDeletedAccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UserWhoDeletedAccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.1.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b01461bc-38e2-420a-9978-9aec73d7d308')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b01461bc-38e2-420a-9978-9aec73d7d308')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Office365 Sharepoint File transfer Folders above threshold",
+                "description": "Identifies Office365 Sharepoint File Transfers with distinct folder count above certain threshold in a 15min time period.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let threshold = 500;\nOfficeActivity\n| where EventSource == \"SharePoint\" and OfficeWorkload has_any(\"SharePoint\", \"OneDrive\") and Operation has_any (\"FileDownloaded\", \"FileSyncDownloadedFull\", \"FileSyncUploadedFull\", \"FileUploaded\")\n| summarize count_distinct_SourceRelativeUrl=dcount(SourceRelativeUrl), dirlist=make_set(SourceRelativeUrl, 10000) by UserId,ClientIP,UserAgent,bin(TimeGenerated, 15m)\n| where count_distinct_SourceRelativeUrl >= threshold\n| extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat(\"SeeDirListField\",\"_\", tostring(hash(tostring(dirlist)))))\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1020"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "8a547285-801c-4290-aa2e-5e7e20ca157d",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {
+                    "TransferCount": "count_distinct_SourceRelativeUrl",
+                    "FilesList": "dirlist"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "DirSample"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.5"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6af93dd1-e235-4287-bbae-c705c28b48cb')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6af93dd1-e235-4287-bbae-c705c28b48cb')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Office365 Sharepoint File transfer above threshold",
+                "description": "Identifies Office365 Sharepoint File Transfers above certain threshold in a 15min time period.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let threshold = 5000;\nOfficeActivity\n| where EventSource == \"SharePoint\" and OfficeWorkload has_any(\"SharePoint\", \"OneDrive\") and Operation has_any (\"FileDownloaded\", \"FileSyncDownloadedFull\", \"FileSyncUploadedFull\", \"FileUploaded\")\n| summarize count_distinct_OfficeObjectId=dcount(OfficeObjectId), fileslist=make_set(OfficeObjectId, 10000) by UserId,ClientIP,bin(TimeGenerated, 15m)\n| where count_distinct_OfficeObjectId >= threshold\n| extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat(\"SeeFilesListField\",\"_\", tostring(hash(tostring(fileslist)))))\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1020"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "8b4f03e7-3460-4401-824d-e65a8dd464f0",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {
+                    "TransferCount": "count_distinct_OfficeObjectId",
+                    "FilesList": "fileslist"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileSample"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.5"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/aedcd64f-9831-43dd-8c04-412604814549')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/aedcd64f-9831-43dd-8c04-412604814549')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Office Policy Tampering",
+                "description": "Identifies if any tampering is done to either auditlog, ATP Safelink, SafeAttachment, AntiPhish or Dlp policy. \nAn adversary may use this technique to evade detection or avoid other policy based defenses.\nReferences: https://docs.microsoft.com/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let opList = OfficeActivity \n| summarize by Operation\n//| where Operation startswith \"Remove-\" or Operation startswith \"Disable-\"\n| where Operation has_any (\"Remove\", \"Disable\")\n| where Operation contains \"AntiPhish\" or Operation contains \"SafeAttachment\" or Operation contains \"SafeLinks\" or Operation contains \"Dlp\" or Operation contains \"Audit\"\n| summarize make_set(Operation, 500);\nOfficeActivity\n// Only admin or global-admin can disable/remove policy\n| where RecordType =~ \"ExchangeAdmin\"\n| where UserType in~ (\"Admin\",\"DcAdmin\")\n// Pass in interesting Operation list\n| where Operation in~ (opList)\n| extend ClientIPOnly = case( \nClientIP has \".\", tostring(split(ClientIP,\":\")[0]), \nClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))),\nClientIP\n)  \n| extend Port = case(\nClientIP has \".\", (split(ClientIP,\":\")[1]),\nClientIP has \"[\", tostring(split(ClientIP,\"]:\")[1]),\nClientIP\n)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence",
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1098",
+                    "T1562"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "fbd72eb8-087e-466b-bd54-1ca6ea08c6d3",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.3"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a2ed3b58-722f-4f9d-ad23-a674886258d6')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a2ed3b58-722f-4f9d-ad23-a674886258d6')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Exchange AuditLog Disabled",
+                "description": "Identifies when the exchange audit logging has been disabled which may be an adversary attempt to evade detection or avoid other defenses.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "OfficeActivity\n| where OfficeWorkload =~ \"Exchange\" \n| where UserType in~ (\"Admin\",\"DcAdmin\")\n// Only admin or global-admin can disable audit logging\n| where Operation =~ \"Set-AdminAuditLogConfig\"\n| extend AdminAuditLogEnabledValue = tostring(parse_json(tostring(parse_json(tostring(array_slice(parse_json(Parameters),3,3)))[0])).Value)\n| where AdminAuditLogEnabledValue =~ \"False\"\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP, ResultStatus, Parameters, AdminAuditLogEnabledValue\n| extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), UserId)\n| extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')\n| extend AccountName = iff(UserId contains '\\\\', tostring(split(UserId, '\\\\')[1]), AccountName)\n| extend AccountNTDomain = iff(UserId contains '\\\\', tostring(split(UserId, '\\\\')[0]), '')\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1562"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "194dd92e-d6e7-4249-85a5-273350a7f5ce",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountNTDomain"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.6"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ed5e4968-e013-4a84-be3d-e000d464837e')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ed5e4968-e013-4a84-be3d-e000d464837e')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "SharePointFileOperation via previously unseen IPs",
+                "description": "Identifies anomalies using user behavior by setting a threshold for significant changes in file upload/download activities from new IP addresses. It establishes a baseline of typical behavior, compares it to recent activity, and flags deviations exceeding a default threshold of 25.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Define a threshold for significant deviations\nlet threshold = 25;\n// Define the name for the SharePoint File Operation record type\nlet szSharePointFileOperation = \"SharePointFileOperation\";\n// Define an array of SharePoint operations of interest\nlet szOperations = dynamic([\"FileDownloaded\", \"FileUploaded\"]);\n// Define the start and end time for the analysis period\nlet starttime = 14d;\nlet endtime = 1d;\n// Define a baseline of normal user behavior\nlet userBaseline = OfficeActivity\n| where TimeGenerated between(ago(starttime)..ago(endtime))\n| where RecordType =~ szSharePointFileOperation\n| where Operation in~ (szOperations)\n| where isnotempty(UserAgent)\n| summarize Count = count() by UserId, Operation, Site_Url, ClientIP\n| summarize AvgCount = avg(Count) by UserId, Operation, Site_Url, ClientIP;\n// Get recent user activity\nlet recentUserActivity = OfficeActivity\n| where TimeGenerated > ago(endtime)\n| where RecordType =~ szSharePointFileOperation\n| where Operation in~ (szOperations)\n| where isnotempty(UserAgent)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, Site_Url, ClientIP, OfficeObjectId, OfficeWorkload, UserAgent;\n// Join the baseline and recent activity, and calculate the deviation\nlet UserBehaviorAnalysis = userBaseline | join kind=inner (recentUserActivity) on UserId, Operation, Site_Url, ClientIP\n| extend Deviation = abs(RecentCount - AvgCount) / AvgCount;\n// Filter for significant deviations\nUserBehaviorAnalysis\n| where Deviation > threshold\n| project StartTimeUtc, EndTimeUtc, UserId, UserType, Operation, ClientIP, Site_Url, OfficeObjectId, OfficeWorkload, UserAgent, Deviation, Count=RecentCount\n| order by Count desc, ClientIP asc, Operation asc, UserId asc\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1030"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "4b11568b-3f5f-4ba1-80c8-7f1dc8390eb7",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "Site_Url"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.4"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5614622c-d5c0-45d9-bfb0-b52ba0448bec')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5614622c-d5c0-45d9-bfb0-b52ba0448bec')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Rare and potentially high-risk Office operations",
+                "description": "Identifies Office operations that are typically rare and can provide capabilities useful to attackers.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "OfficeActivity\n| where Operation in~ ( \"Add-MailboxPermission\", \"Add-MailboxFolderPermission\", \"Set-Mailbox\", \"New-ManagementRoleAssignment\", \"New-InboxRule\", \"Set-InboxRule\", \"Set-TransportRule\")\nand not(UserId has_any ('NT AUTHORITY\\\\SYSTEM (Microsoft.Exchange.ServiceHost)', 'NT AUTHORITY\\\\SYSTEM (Microsoft.Exchange.AdminApi.NetCore)', 'NT AUTHORITY\\\\SYSTEM (w3wp)', 'devilfish-applicationaccount') and Operation in~ ( \"Add-MailboxPermission\", \"Set-Mailbox\"))\n| extend ClientIPOnly = tostring(extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?', dynamic([\"IPAddress\"]), ClientIP)[0])\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence",
+                    "Collection"
+                ],
+                "techniques": [
+                    "T1098",
+                    "T1114"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "957cb240-f45d-4491-9ba5-93430a3c08be",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AppId",
+                                "columnName": "AppId"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.5"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9ba561fb-c7eb-488a-91e4-699e923257e9')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9ba561fb-c7eb-488a-91e4-699e923257e9')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Malicious Inbox Rule",
+                "description": "Often times after the initial compromise the attackers create inbox rules to delete emails that contain certain keywords.\n This is done so as to limit ability to warn compromised users that they've been compromised. Below is a sample query that tries to detect this.\nReference: https://www.reddit.com/r/sysadmin/comments/7kyp0a/recent_phishing_attempts_my_experience_and_what/",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let Keywords = dynamic([\"helpdesk\", \" alert\", \" suspicious\", \"fake\", \"malicious\", \"phishing\", \"spam\", \"do not click\", \"do not open\", \"hijacked\", \"Fatal\"]);\nOfficeActivity\n| where OfficeWorkload =~ \"Exchange\" \n| where Operation =~ \"New-InboxRule\" and (ResultStatus =~ \"True\" or ResultStatus =~ \"Succeeded\")\n| where Parameters has \"Deleted Items\" or Parameters has \"Junk Email\"  or Parameters has \"DeleteMessage\"\n| extend Events=todynamic(Parameters)\n| parse Events  with * \"SubjectContainsWords\" SubjectContainsWords '}'*\n| parse Events  with * \"BodyContainsWords\" BodyContainsWords '}'*\n| parse Events  with * \"SubjectOrBodyContainsWords\" SubjectOrBodyContainsWords '}'*\n| where SubjectContainsWords has_any (Keywords)\n or BodyContainsWords has_any (Keywords)\n or SubjectOrBodyContainsWords has_any (Keywords)\n| extend ClientIPAddress = case( ClientIP has \".\", tostring(split(ClientIP,\":\")[0]), ClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))), ClientIP )\n| extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords),BodyContainsWords,SubjectOrBodyContainsWords )))\n| extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\\\')[-1]))\n| summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n| extend OriginatingServerName = tostring(split(OriginatingServer, \" \")[0])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence",
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1098",
+                    "T1078"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "7b907bf7-77d4-41d0-a208-5643ff75bf9a",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "OriginatingServerName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.4"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ef47d01a-e35d-45dd-af40-4fc0fc237601')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ef47d01a-e35d-45dd-af40-4fc0fc237601')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Mail redirect via ExO transport rule",
+                "description": "Identifies when Exchange Online transport rule configured to forward emails.\nThis could be an adversary mailbox configured to collect mail from multiple user accounts.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "OfficeActivity\n| where OfficeWorkload == \"Exchange\"\n| where Operation in~ (\"New-TransportRule\", \"Set-TransportRule\")\n| mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))\n| extend RuleName = case(\n    Operation =~ \"Set-TransportRule\", OfficeObjectId,\n    Operation =~ \"New-TransportRule\", ParsedParameters.Name,\n    \"Unknown\")\n| mv-expand ExpandedParameters = todynamic(Parameters)\n| where ExpandedParameters.Name in~ (\"BlindCopyTo\", \"RedirectMessageTo\") and isnotempty(ExpandedParameters.Value)\n| extend RedirectTo = ExpandedParameters.Value\n| extend ClientIPValues = extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?([-:](?P<Port>\\d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIP)[0]\n| extend From = ParsedParameters.From\n| project TimeGenerated, RedirectTo, IPAddress = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1]), UserId, From, Operation, RuleName, Parameters\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Collection",
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1114",
+                    "T1020"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "500415fb-bba7-4227-a08a-9857fb61b6a7",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.4"
+            }
+        }
+    ]
+}
